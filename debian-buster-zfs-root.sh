@@ -418,6 +418,7 @@ echo -e "\nauto $ETHDEV\niface $ETHDEV inet dhcp\n" >>/target/etc/network/interf
 echo -e "nameserver 8.8.8.8\nnameserver 8.8.4.4" >> /target/etc/resolv.conf
 
 chroot /target /usr/bin/passwd
+chroot /target /usr/bin/tasksel --new-install
 chroot /target /usr/sbin/dpkg-reconfigure tzdata
 chroot /target /usr/sbin/dpkg-reconfigure keyboard-configuration
 
