@@ -331,7 +331,6 @@ if [ $? -ne 0 ]; then
 fi
 zfs set compression=on ${BOOT_POOL}
 
-zfs create $ZPOOL/ROOT
 zfs create -o mountpoint=/ $ZPOOL/ROOT
 zpool set bootfs=$ZPOOL/ROOT $ZPOOL
 
