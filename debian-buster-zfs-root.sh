@@ -171,7 +171,7 @@ fi
 declare -A BYID
 while read -r IDLINK; do
 	BYID["$(basename "$(readlink "$IDLINK")")"]="$IDLINK"
-done < <(find /dev/disk/by-id/ -type l)
+done < <(find /dev/disk/by-id/ -type l -not -name "wwn*")
 
 for DISK in $(lsblk -I8,254,259 -dn -o name); do
 	if [ -z "${BYID[$DISK]}" ]; then
