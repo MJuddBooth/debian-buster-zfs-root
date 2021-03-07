@@ -323,7 +323,7 @@ zpool create -f -o ashift=12 -o altroot=/target \
 -o feature@spacemap_histogram=enabled \
 -o feature@userobj_accounting=enabled \
 -O acltype=posixacl -O canmount=off -O compression=lz4 -O mountpoint=none \
--O normalization=formD -O relatime=on -O xattr=sa \
+-O normalization=formD -o atime=off -O relatime=on -O xattr=sa \
 $ZPOOL $RAIDDEF
 if [ $? -ne 0 ]; then
 	echo "Unable to create zpool '$ZPOOL'" >&2
