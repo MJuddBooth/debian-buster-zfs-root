@@ -354,19 +354,6 @@ sed -i "1s/^/127.0.1.1\t$SYSTEM_NAME\n/" /target/etc/hosts
 # Copy hostid as the target system will otherwise not be able to mount the misleadingly foreign file system
 cp -va /etc/hostid /target/etc/
 
-# cat << EOF >/target/etc/fstab
-# # /etc/fstab: static file system information.
-# #
-# # Use 'blkid' to print the universally unique identifier for a
-# # device; this may be used with UUID= as a more robust way to name devices
-# # that works even if disks are added and removed. See fstab(5).
-# #
-# # <file system>         <mount point>   <type>  <options>       <dump>  <pass>
-# /dev/zvol/$ZPOOL/swap     none            swap    defaults        0       0
-# $ZPOOL/var                /var            zfs     defaults        0       0
-# $ZPOOL/var/tmp            /var/tmp        zfs     defaults        0       0
-# EOF
-
 mount --rbind /dev /target/dev
 mount --rbind /proc /target/proc
 mount --rbind /sys /target/sys
