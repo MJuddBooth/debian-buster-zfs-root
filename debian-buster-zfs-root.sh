@@ -339,7 +339,9 @@ zpool status
 zfs list
 
 # Create linux system with preinstalled packages
-need_packages=(openssh-server locales linux-headers-amd64 linux-image-amd64 rsync sharutils psmisc htop patch less console-setup keyboard-configuration "${ADDITIONAL_PACKAGES[@]}")
+need_packages=(openssh-server locales linux-headers-amd64 linux-image-amd64 \
+rsync sharutils psmisc htop patch less man console-setup keyboard-configuration \
+"${ADDITIONAL_PACKAGES[@]}")
 include=$(join , "${need_packages[@]}")
 
 debootstrap --include="$include" \
