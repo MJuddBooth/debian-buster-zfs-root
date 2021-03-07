@@ -95,7 +95,7 @@ PARTZFS=3
 # POST_INSTALL_SCRIPT=script.sh
 
 # Name of main ZFS pool
-ZPOOL="${ZPOOL:-rpool}"
+ZPOOL="${ZPOOL:-BOOT}"
 
 # The debian version to install
 TARGETDIST="${TARGETDIST:-buster}"
