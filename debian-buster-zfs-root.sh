@@ -329,7 +329,7 @@ if [ $? -ne 0 ]; then
 	echo "Unable to create zpool '$ZPOOL'" >&2
 	exit 1
 fi
-zfs set compression=on ${BOOT_POOL}
+zfs set compression=on $ZPOOL
 
 zfs create -o mountpoint=/ $ZPOOL/ROOT
 zpool set bootfs=$ZPOOL/ROOT $ZPOOL
