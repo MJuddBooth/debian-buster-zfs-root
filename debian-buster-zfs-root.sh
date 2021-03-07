@@ -413,11 +413,6 @@ if [ "$GRUBTYPE" == "$EFI" ]; then
 	done
 fi
 
-# if [ -d /proc/acpi ]; then
-# 	chroot /target /usr/bin/apt-get install --yes acpi acpid
-# 	chroot /target service acpid stop
-# fi
-
 ETHDEV=$(ip addr show | awk '/inet.*brd/{print $NF; exit}')
 test -n "$ETHDEV" || ETHDEV=enp0s1
 echo -e "\nauto $ETHDEV\niface $ETHDEV inet dhcp\n" >>/target/etc/network/interfaces
@@ -442,4 +437,3 @@ sync
 
 ## chroot /target /bin/bash --login
 ## zpool import -R /target rpool
-
