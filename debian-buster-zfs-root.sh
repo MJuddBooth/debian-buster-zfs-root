@@ -309,45 +309,31 @@ done
 
 sleep 2
 
-zpool create -f -o ashift=12 -o altroot=/target -o autotrim=$ENABLE_AUTO_TRIM -O atime=off -O mountpoint=none $ZPOOL $RAIDDEF
+zpool create -f -o ashift=12 -o altroot=/target -d \
+-o feature@async_destroy=enabled \
+-o feature@bookmarks=enabled \
+-o feature@embedded_data=enabled \
+-o feature@empty_bpobj=enabled \
+-o feature@enabled_txg=enabled \
+-o feature@extensible_dataset=enabled \
+-o feature@filesystem_limits=enabled \
+-o feature@hole_birth=enabled \
+-o feature@large_blocks=enabled \
+-o feature@lz4_compress=enabled \
+-o feature@spacemap_histogram=enabled \
+-o feature@userobj_accounting=enabled \
+-O acltype=posixacl -O canmount=off -O compression=lz4 -O devices=off -O mountpoint=none \
+-O normalization=formD -O relatime=on -O xattr=sa \
+$ZPOOL $RAIDDEF
 if [ $? -ne 0 ]; then
 	echo "Unable to create zpool '$ZPOOL'" >&2
 	exit 1
 fi
-
-zfs set compression=lz4 $ZPOOL
-
-# Enable extended attributes on this pool
-if [ "$ENABLE_EXTENDED_ATTRIBUTES" == "on" ]; then
-	zfs set xattr=sa $ZPOOL
-	zfs set acltype=posixacl $ZPOOL
-fi
+zfs set compression=on ${BOOT_POOL}
 
 zfs create $ZPOOL/ROOT
-zfs create -o mountpoint=/ $ZPOOL/ROOT/$SYSTEM_NAME
-zpool set bootfs=$ZPOOL/ROOT/$SYSTEM_NAME $ZPOOL
-
-# zfs create -o mountpoint=/tmp -o setuid=off -o exec=$ENABLE_EXECUTE_TMP -o devices=off -o com.sun:auto-snapshot=false -o quota=$SIZETMP $ZPOOL/tmp
-# chmod 1777 /target/tmp
-
-# /var needs to be mounted via fstab, the ZFS mount script runs too late during boot
-# zfs create -o mountpoint=legacy $ZPOOL/var
-# mkdir -v /target/var
-# mount -t zfs $ZPOOL/var /target/var
-
-# /var/tmp needs to be mounted via fstab, the ZFS mount script runs too late during boot
-# zfs create -o mountpoint=legacy -o com.sun:auto-snapshot=false -o quota=$SIZEVARTMP $ZPOOL/var/tmp
-# mkdir -v -m 1777 /target/var/tmp
-# mount -t zfs $ZPOOL/var/tmp /target/var/tmp
-# chmod 1777 /target/var/tmp
-
-# if [[ $SIZESWAP != "0G" ]]; then
-# 	zfs create -V "$SIZESWAP" -b "$(getconf PAGESIZE)" -o primarycache=metadata -o com.sun:auto-snapshot=false -o logbias=throughput -o sync=always $ZPOOL/swap
-# fi
-
-# sometimes needed to wait for /dev/zvol/$ZPOOL/swap to appear
-# sleep 2
-# mkswap -f /dev/zvol/$ZPOOL/swap
+zfs create -o mountpoint=/ $ZPOOL/ROOT
+zpool set bootfs=$ZPOOL/ROOT $ZPOOL
 
 zpool status
 zfs list
