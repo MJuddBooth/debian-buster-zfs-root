@@ -309,7 +309,7 @@ done
 
 sleep 2
 
-zpool create -f -o ashift=12 -o altroot=/target -d \
+zpool create -f -o ashift=12 -o altroot=/target \
 -o feature@async_destroy=enabled \
 -o feature@bookmarks=enabled \
 -o feature@embedded_data=enabled \
@@ -322,7 +322,7 @@ zpool create -f -o ashift=12 -o altroot=/target -d \
 -o feature@lz4_compress=enabled \
 -o feature@spacemap_histogram=enabled \
 -o feature@userobj_accounting=enabled \
--O acltype=posixacl -O canmount=off -O compression=lz4 -O devices=off -O mountpoint=none \
+-O acltype=posixacl -O canmount=off -O compression=lz4 -O mountpoint=none \
 -O normalization=formD -O relatime=on -O xattr=sa \
 $ZPOOL $RAIDDEF
 if [ $? -ne 0 ]; then
