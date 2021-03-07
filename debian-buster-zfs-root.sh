@@ -107,9 +107,9 @@ SYSTEM_LANGUAGE="${SYSTEM_LANGUAGE:-en_US.UTF-8}"
 SYSTEM_NAME="${SYSTEM_NAME:-debian-${TARGETDIST}}"
 
 # Sizes for temporary content and swap
-SIZESWAP="${SIZESWAP:-2G}"
-SIZETMP="${SIZETMP:-3G}"
-SIZEVARTMP="${SIZEVARTMP:-3GB}"
+# SIZESWAP="${SIZESWAP:-2G}"
+# SIZETMP="${SIZETMP:-3G}"
+# SIZEVARTMP="${SIZEVARTMP:-3GB}"
 
 # The extended attributes will improve performance but reduce compatibility with non-Linux ZFS implementations
 # Enabled by default because we're using a Linux compatible ZFS implementation
@@ -117,7 +117,7 @@ ENABLE_EXTENDED_ATTRIBUTES="${ENABLE_EXTENDED_ATTRIBUTES:-on}"
 
 # Allow execute in /tmp
 # Possible values: off, on
-ENABLE_EXECUTE_TMP="${ENABLE_EXECUTE_TMP:-off}"
+# ENABLE_EXECUTE_TMP="${ENABLE_EXECUTE_TMP:-off}"
 
 # Enable autotrim
 # Possible values: off, on
@@ -327,27 +327,27 @@ zfs create $ZPOOL/ROOT
 zfs create -o mountpoint=/ $ZPOOL/ROOT/$SYSTEM_NAME
 zpool set bootfs=$ZPOOL/ROOT/$SYSTEM_NAME $ZPOOL
 
-zfs create -o mountpoint=/tmp -o setuid=off -o exec=$ENABLE_EXECUTE_TMP -o devices=off -o com.sun:auto-snapshot=false -o quota=$SIZETMP $ZPOOL/tmp
-chmod 1777 /target/tmp
+# zfs create -o mountpoint=/tmp -o setuid=off -o exec=$ENABLE_EXECUTE_TMP -o devices=off -o com.sun:auto-snapshot=false -o quota=$SIZETMP $ZPOOL/tmp
+# chmod 1777 /target/tmp
 
 # /var needs to be mounted via fstab, the ZFS mount script runs too late during boot
-zfs create -o mountpoint=legacy $ZPOOL/var
-mkdir -v /target/var
-mount -t zfs $ZPOOL/var /target/var
+# zfs create -o mountpoint=legacy $ZPOOL/var
+# mkdir -v /target/var
+# mount -t zfs $ZPOOL/var /target/var
 
 # /var/tmp needs to be mounted via fstab, the ZFS mount script runs too late during boot
-zfs create -o mountpoint=legacy -o com.sun:auto-snapshot=false -o quota=$SIZEVARTMP $ZPOOL/var/tmp
-mkdir -v -m 1777 /target/var/tmp
-mount -t zfs $ZPOOL/var/tmp /target/var/tmp
-chmod 1777 /target/var/tmp
+# zfs create -o mountpoint=legacy -o com.sun:auto-snapshot=false -o quota=$SIZEVARTMP $ZPOOL/var/tmp
+# mkdir -v -m 1777 /target/var/tmp
+# mount -t zfs $ZPOOL/var/tmp /target/var/tmp
+# chmod 1777 /target/var/tmp
 
-if [[ $SIZESWAP != "0G" ]]; then
-	zfs create -V "$SIZESWAP" -b "$(getconf PAGESIZE)" -o primarycache=metadata -o com.sun:auto-snapshot=false -o logbias=throughput -o sync=always $ZPOOL/swap
-fi
+# if [[ $SIZESWAP != "0G" ]]; then
+# 	zfs create -V "$SIZESWAP" -b "$(getconf PAGESIZE)" -o primarycache=metadata -o com.sun:auto-snapshot=false -o logbias=throughput -o sync=always $ZPOOL/swap
+# fi
 
 # sometimes needed to wait for /dev/zvol/$ZPOOL/swap to appear
-sleep 2
-mkswap -f /dev/zvol/$ZPOOL/swap
+# sleep 2
+# mkswap -f /dev/zvol/$ZPOOL/swap
 
 zpool status
 zfs list
@@ -366,18 +366,18 @@ sed -i "1s/^/127.0.1.1\t$SYSTEM_NAME\n/" /target/etc/hosts
 # Copy hostid as the target system will otherwise not be able to mount the misleadingly foreign file system
 cp -va /etc/hostid /target/etc/
 
-cat << EOF >/target/etc/fstab
-# /etc/fstab: static file system information.
-#
-# Use 'blkid' to print the universally unique identifier for a
-# device; this may be used with UUID= as a more robust way to name devices
-# that works even if disks are added and removed. See fstab(5).
-#
-# <file system>         <mount point>   <type>  <options>       <dump>  <pass>
-/dev/zvol/$ZPOOL/swap     none            swap    defaults        0       0
-$ZPOOL/var                /var            zfs     defaults        0       0
-$ZPOOL/var/tmp            /var/tmp        zfs     defaults        0       0
-EOF
+# cat << EOF >/target/etc/fstab
+# # /etc/fstab: static file system information.
+# #
+# # Use 'blkid' to print the universally unique identifier for a
+# # device; this may be used with UUID= as a more robust way to name devices
+# # that works even if disks are added and removed. See fstab(5).
+# #
+# # <file system>         <mount point>   <type>  <options>       <dump>  <pass>
+# /dev/zvol/$ZPOOL/swap     none            swap    defaults        0       0
+# $ZPOOL/var                /var            zfs     defaults        0       0
+# $ZPOOL/var/tmp            /var/tmp        zfs     defaults        0       0
+# EOF
 
 mount --rbind /dev /target/dev
 mount --rbind /proc /target/proc
