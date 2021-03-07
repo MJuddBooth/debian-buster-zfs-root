@@ -363,7 +363,7 @@ echo "LANG=\"$SYSTEM_LANGUAGE\"" > /target/etc/default/locale
 chroot /target /usr/sbin/locale-gen
 
 # Get debian version in chroot environment
-install_backports_packages "$TARGETDIST" true zfs-initramfs zfs-dkms "${ADDITIONAL_BACKPORTS_PACKAGES[@]}"
+install_backports_packages "$TARGETDIST" true linux-image-amd64 zfs-initramfs zfs-dkms "${ADDITIONAL_BACKPORTS_PACKAGES[@]}"
 
 # Select correct grub for the requested plattform
 if [ "$GRUBTYPE" == "$EFI" ]; then
