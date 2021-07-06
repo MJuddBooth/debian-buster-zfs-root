@@ -37,8 +37,8 @@ function join() {
 # $1: str: Debian release version
 # $2: bool: Run in Chroot
 # $...: Packages
-function install_backports_packages() {
-	destination="/etc/apt/sources.list.d/backports.list"
+function install_packages() {
+	destination="/etc/apt/sources.list.d/non-free.list"
 
 	# Add chroot prefix if set
 	if $2; then
@@ -53,6 +53,14 @@ function install_backports_packages() {
 		10*|buster*)
 			echo "deb http://deb.debian.org/debian buster-backports main contrib non-free" >"$destination"
 			backports_version="buster-backports"
+			;;
+		11*|bullseye*)
+			echo "deb http://deb.debian.org/debian bullseye main contrib non-free" >"$destination"
+			backports_version="bullseye"
+			;;
+		11*|sid*)
+			echo "deb http://deb.debian.org/debian sid main contrib non-free" >"$destination"
+			backports_version="sid"
 			;;
 		*)
 			echo "Unsupported debian version" >&2
