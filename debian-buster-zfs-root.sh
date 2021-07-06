@@ -102,6 +102,10 @@ PARTZFS=3
 # ADDITIONAL_PACKAGES=package1,package2,package3,make,sure,to,use,commas
 # POST_INSTALL_SCRIPT=script.sh
 
+if [ -f "environment.conf" ]; then
+    . ./environment.conf
+fi
+
 # Name of main ZFS pool
 ZPOOL="${ZPOOL:-rpool}"
 
