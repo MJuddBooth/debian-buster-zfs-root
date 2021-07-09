@@ -121,7 +121,7 @@ SYSTEM_NAME="${SYSTEM_NAME:-debian-${TARGETDIST}}"
 # Sizes for temporary content and swap
 SIZESWAP="${SIZESWAP:-2G}"
 SIZETMP="${SIZETMP:-3G}"
-SIZEVARTMP="${SIZEVARTMP:-3GB}"
+SIZEVARTMP="${SIZEVARTMP:-3G}"
 
 # The extended attributes will improve performance but reduce compatibility with non-Linux ZFS implementations
 # Enabled by default because we're using a Linux compatible ZFS implementation
@@ -186,10 +186,11 @@ while read -r IDLINK; do
 done < <(find /dev/disk/by-id/ -type l)
 
 for DISK in $(lsblk -I8,254,259 -dn -o name); do
+        dsize=$(lsblk -dn -o size /dev/$DISK|tr -d " ")
 	if [ -z "${BYID[$DISK]}" ]; then
 		SELECT+=("$DISK" "(no /dev/disk/by-id persistent device name available)" off)
 	else
-		SELECT+=("$DISK" "${BYID[$DISK]}" off)
+		SELECT+=("$DISK" "${BYID[$DISK]} ($dsize)" off)
 	fi
 done
 
@@ -298,8 +299,8 @@ echo "Install packages:" "${need_packages[@]}"
 DEBIAN_FRONTEND=noninteractive apt-get install --yes "${need_packages[@]}"
 
 deb_release=$(head -n1 /etc/debian_version)
-echo "Install backports packages"
-install_backports_packages "$deb_release" false zfs-dkms zfsutils-linux
+echo "Install additional packages"
+install_packages "$deb_release" false zfs-dkms zfsutils-linux
 
 modprobe zfs
 if [ $? -ne 0 ]; then
@@ -321,7 +322,10 @@ done
 
 sleep 2
 
-zpool create -f -o ashift=12 -o altroot=/target -o autotrim=$ENABLE_AUTO_TRIM -O atime=off -O mountpoint=none $ZPOOL $RAIDDEF
+zpool create -f -o ashift=12 -o altroot=/target \
+      -o autotrim=$ENABLE_AUTO_TRIM \
+      -O atime=off -O relatime=on -O canmount=off -O mountpoint=none \
+      $ZPOOL $RAIDDEF
 if [ $? -ne 0 ]; then
 	echo "Unable to create zpool '$ZPOOL'" >&2
 	exit 1
@@ -401,7 +405,7 @@ echo "LANG=\"$SYSTEM_LANGUAGE\"" > /target/etc/default/locale
 chroot /target /usr/sbin/locale-gen
 
 # Get debian version in chroot environment
-install_backports_packages "$TARGETDIST" true zfs-initramfs zfs-dkms "${ADDITIONAL_BACKPORTS_PACKAGES[@]}"
+install_packages "$TARGETDIST" true zfs-initramfs zfs-dkms "${ADDITIONAL_BACKPORTS_PACKAGES[@]}"
 
 # Select correct grub for the requested plattform
 if [ "$GRUBTYPE" == "$EFI" ]; then
