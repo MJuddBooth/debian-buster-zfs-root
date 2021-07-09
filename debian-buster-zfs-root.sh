@@ -351,6 +351,11 @@ zfs create -o mountpoint=legacy $ZPOOL/var
 mkdir -v /target/var
 mount -t zfs $ZPOOL/var /target/var
 
+# /usr needs to be mounted via fstab, the ZFS mount script runs too late during boot
+zfs create -o mountpoint=legacy $ZPOOL/usr
+mkdir -v /target/usr
+mount -t zfs $ZPOOL/usr /target/var
+
 # /var/tmp needs to be mounted via fstab, the ZFS mount script runs too late during boot
 zfs create -o mountpoint=legacy -o com.sun:auto-snapshot=false -o quota=$SIZEVARTMP $ZPOOL/var/tmp
 mkdir -v -m 1777 /target/var/tmp
@@ -391,6 +396,7 @@ cat << EOF >/target/etc/fstab
 #
 # <file system>         <mount point>   <type>  <options>       <dump>  <pass>
 /dev/zvol/$ZPOOL/swap     none            swap    defaults        0       0
+$ZPOOL/usr                /usr            zfs     defaults        0       0
 $ZPOOL/var                /var            zfs     defaults        0       0
 $ZPOOL/var/tmp            /var/tmp        zfs     defaults        0       0
 EOF
