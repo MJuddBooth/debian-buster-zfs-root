@@ -77,6 +77,14 @@ function install_packages() {
 	fi
 }
 
+function check_modules() {
+        modprobe zfs
+        if [ $? -ne 0 ]; then
+		echo "Unable to load ZFS kernel module" >&2
+		exit 1
+	fi
+}
+
 
 ### Constants
 BIOS="bios"
@@ -103,14 +111,14 @@ PARTZFS=3
 # POST_INSTALL_SCRIPT=script.sh
 
 if [ -f "environment.conf" ]; then
-    . ./environment.conf
+	. ./environment.conf
 fi
 
 # Name of main ZFS pool
 ZPOOL="${ZPOOL:-rpool}"
 
 # The debian version to install
-TARGETDIST="${TARGETDIST:-buster}"
+TARGETDIST="${TARGETDIST:-bullseye}"
 
 # Language
 SYSTEM_LANGUAGE="${SYSTEM_LANGUAGE:-en_US.UTF-8}"
@@ -179,6 +187,9 @@ whiptail --title "Settings summary" --yesno "$SETTINGS_SUMMARY" 20 78
 if [[ $? != 0 ]]; then
     exit 1;
 fi
+
+function create_zpool() {
+}
 
 declare -A BYID
 while read -r IDLINK; do
@@ -302,11 +313,8 @@ deb_release=$(head -n1 /etc/debian_version)
 echo "Install additional packages"
 install_packages "$deb_release" false zfs-dkms zfsutils-linux
 
-modprobe zfs
-if [ $? -ne 0 ]; then
-	echo "Unable to load ZFS kernel module" >&2
-	exit 1
-fi
+# make sure it worked
+check_modules
 
 test -d /proc/spl/kstat/zfs/$ZPOOL && zpool destroy $ZPOOL
 
