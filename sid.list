@@ -1,0 +1,8 @@
+deb http://deb.debian.org/debian sid main contrib
+deb-src http://deb.debian.org/debian sid main contrib
+
+deb http://deb.debian.org/debian-security sid-security main contrib
+deb-src http://deb.debian.org/debian-security sid-security main contrib
+
+deb http://deb.debian.org/debian sid-updates main contrib
+deb-src http://deb.debian.org/debian sid-updates main contrib

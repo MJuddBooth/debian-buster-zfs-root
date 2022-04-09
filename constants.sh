@@ -1,0 +1,10 @@
+
+### Constants
+BIOS="bios"
+EFI="efi"
+
+PARTBIOS=1
+PARTEFI=2
+PARTBOOT=3
+PARTROOT=4
+

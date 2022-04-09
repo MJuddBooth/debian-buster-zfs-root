@@ -1,4 +1,4 @@
-#!/bin/bash -e
+#!/bin/bash -ex
 #
 # debian-buster-zfs-root.sh V1.10
 #
@@ -25,81 +25,13 @@
 # with this program. If not, see <http://www.gnu.org/licenses/gpl-3.0.txt>.
 #
 
-## Functions
-# Joins an array
-# Delimiter
-function join() {
-    local IFS="$1"
-    shift
-    echo "$*"
-}
-
-# $1: str: Debian release version
-# $2: bool: Run in Chroot
-# $...: Packages
-function install_packages() {
-	destination="/etc/apt/sources.list.d/non-free.list"
-
-	# Add chroot prefix if set
-	if $2; then
-		destination="/target${destination}"
-	fi
-
-	case $1 in
-		9*|stretch*)
-			echo "deb http://deb.debian.org/debian stretch-backports main contrib non-free" >"$destination"
-			backports_version="stretch-backports"
-			;;
-		10*|buster*)
-			echo "deb http://deb.debian.org/debian buster-backports main contrib non-free" >"$destination"
-			backports_version="buster-backports"
-			;;
-		11*|bullseye*)
-			echo "deb http://deb.debian.org/debian bullseye main contrib non-free" >"$destination"
-			backports_version="bullseye"
-			;;
-		11*|sid*)
-			echo "deb http://deb.debian.org/debian sid main contrib non-free" >"$destination"
-			backports_version="sid"
-			;;
-		*)
-			echo "Unsupported debian version" >&2
-			exit 1
-			;;
-	esac
-
-	if $2; then
-		chroot /target /usr/bin/apt-get update
-		chroot /target /usr/bin/apt-get install --yes -t $backports_version "${@:3}"
-	else
-		apt-get update
-		apt-get install --yes -t $backports_version "${@:3}"
-	fi
-}
-
-function check_modules() {
-        modprobe zfs
-        if [ $? -ne 0 ]; then
-		echo "Unable to load ZFS kernel module" >&2
-		exit 1
-	fi
-}
-
-
-### Constants
-BIOS="bios"
-EFI="efi"
-
-PARTBIOS=1
-PARTEFI=2
-PARTZFS=3
 
 ### Settings from environment
 ### If you don't want to use environment variables or default values just comment in this variables to modify the values
-# ZPOOL="rpool"
-# TARGETDIST="buster"
+# RPOOL="rpool"
+# TARGETDIST="bullseye"
 # SYSTEM_LANGUAGE="en_US.UTF-8"
-# SYSTEM_NAME="debian-buster"
+# SYSTEM_NAME="debian"
 # SIZESWAP="2G"
 # SIZETMP="3G"
 # SIZEVARTMP="3G"
@@ -111,11 +43,17 @@ PARTZFS=3
 # POST_INSTALL_SCRIPT=script.sh
 
 if [ -f "environment.conf" ]; then
-	. ./environment.conf
+    . ./environment.conf
 fi
 
-# Name of main ZFS pool
-ZPOOL="${ZPOOL:-rpool}"
+. ./constants.sh
+. ./helper-functions.sh
+. ./create_datasets.sh
+. ./setup-base-system.sh
+
+# Name of boot and main ZFS pools
+BPOOL="${BPOOL:-bpool}"
+RPOOL="${RPOOL:-rpool}"
 
 # The debian version to install
 TARGETDIST="${TARGETDIST:-bullseye}"
@@ -164,9 +102,10 @@ if [ "$(id -u )" != "0" ]; then
 	exit 1
 fi
 
+
 SETTINGS_SUMMARY=$(cat <<EOF
 The system will be installed with the following options. Is this correct?
-ZPool name: $ZPOOL
+ZPool name: $RPOOL
 Version: $TARGETDIST
 Language: $SYSTEM_LANGUAGE
 System name: $SYSTEM_NAME
@@ -187,9 +126,6 @@ whiptail --title "Settings summary" --yesno "$SETTINGS_SUMMARY" 20 78
 if [[ $? != 0 ]]; then
     exit 1;
 fi
-
-function create_zpool() {
-}
 
 declare -A BYID
 while read -r IDLINK; do
@@ -216,11 +152,13 @@ fi
 while read -r DISK; do
 	if [ -z "${BYID[$DISK]}" ]; then
 		DISKS+=("/dev/$DISK")
-		ZFSPARTITIONS+=("/dev/$DISK$PARTZFS")
+		BOOTPARTITIONS+=("/dev/$DISK$PARTBOOT")
+		ROOTPARTITIONS+=("/dev/$DISK$PARTROOT")		
 		EFIPARTITIONS+=("/dev/$DISK$PARTEFI")
 	else
 		DISKS+=("${BYID[$DISK]}")
-		ZFSPARTITIONS+=("${BYID[$DISK]}-part$PARTZFS")
+		BOOTPARTITIONS+=("${BYID[$DISK]}-part$PARTBOOT")
+		ROOTPARTITIONS+=("${BYID[$DISK]}-part$PARTROOT")		
 		EFIPARTITIONS+=("${BYID[$DISK]}-part$PARTEFI")
 	fi
 done < "$TMPFILE"
@@ -239,33 +177,6 @@ fi
 
 RAIDLEVEL=$(head -n1 "$TMPFILE" | tr '[:upper:]' '[:lower:]')
 
-case "$RAIDLEVEL" in
-	raid0)
-	RAIDDEF="${ZFSPARTITIONS[*]}"
-		;;
-	raid1)
-	if [ $((${#ZFSPARTITIONS[@]} % 2)) -ne 0 ]; then
-		echo "Need an even number of disks for RAID level '$RAIDLEVEL': ${ZFSPARTITIONS[@]}" >&2
-		exit 1
-	fi
-	I=0
-	for ZFSPARTITION in "${ZFSPARTITIONS[@]}"; do
-		if [ $((I % 2)) -eq 0 ]; then
-			RAIDDEF+=" mirror"
-		fi
-		RAIDDEF+=" $ZFSPARTITION"
-		((I++)) || true
-	done
-		;;
-	*)
-	if [ ${#ZFSPARTITIONS[@]} -lt 3 ]; then
-		echo "Need at least 3 disks for RAID level '$RAIDLEVEL': ${ZFSPARTITIONS[@]}" >&2
-		exit 1
-	fi
-	RAIDDEF="$RAIDLEVEL ${ZFSPARTITIONS[*]}"
-		;;
-esac
-
 GRUBTYPE=$BIOS
 if [ -d /sys/firmware/efi ]; then
 	whiptail --backtitle "$0" --title "EFI boot" --separate-output \
@@ -283,7 +194,7 @@ if [ -d /sys/firmware/efi ]; then
 fi
 
 whiptail --backtitle "$0" --title "Confirmation" \
-	--yesno "\nAre you sure to destroy ZFS pool '$ZPOOL' (if existing), wipe all data of disks '${DISKS[*]}' and create a RAID '$RAIDLEVEL'?\n" 20 74
+	--yesno "\nAre you sure to destroy ZFS pool '$RPOOL' (if existing), wipe all data of disks '${DISKS[*]}' and create a RAID '$RAIDLEVEL'?\n" 20 74
 
 if [ $? -ne 0 ]; then
 	exit 1
@@ -313,182 +224,96 @@ deb_release=$(head -n1 /etc/debian_version)
 echo "Install additional packages"
 install_packages "$deb_release" false zfs-dkms zfsutils-linux
 
-# make sure it worked
-check_modules
-
-test -d /proc/spl/kstat/zfs/$ZPOOL && zpool destroy $ZPOOL
-
-for DISK in "${DISKS[@]}"; do
-	echo -e "\nPartitioning disk $DISK"
-
-	sgdisk --zap-all $DISK
-
-	sgdisk -a1 -n$PARTBIOS:34:2047   -t$PARTBIOS:EF02 \
-						 -n$PARTEFI:2048:+512M -t$PARTEFI:EF00 \
-									 -n$PARTZFS:0:0        -t$PARTZFS:BF01 $DISK
-done
-
-sleep 2
-
-zpool create -f -o ashift=12 -o altroot=/target \
-      -o autotrim=$ENABLE_AUTO_TRIM \
-      -O atime=off -O relatime=on -O canmount=off -O mountpoint=none \
-      $ZPOOL $RAIDDEF
+modprobe zfs
 if [ $? -ne 0 ]; then
-	echo "Unable to create zpool '$ZPOOL'" >&2
+	echo "Unable to load ZFS kernel module" >&2
 	exit 1
 fi
 
-zfs set compression=lz4 $ZPOOL
+test -d /proc/spl/kstat/zfs/$RPOOL && zpool destroy $RPOOL
+
+# for DISK in "${DISKS[@]}"; do
+# 	echo -e "\nPartitioning disk $DISK"
+
+# 	sgdisk --zap-all $DISK
+
+# 	# sgdisk -a1 -n$PARTBIOS:34:2047 -t$PARTBIOS:EF02 $DISK
+# 	# sgdisk -n$PARTEFI:2048:+512M   -t$PARTEFI:EF00  $DISK
+# 	# sgdisk -n$PARTBOOT:0:+2G       -t$PARTBOOT:BF01 $DISK
+# 	# sgdisk -n$PARTROOT:0:0         -t$PARTROOT:BF00 $DISK	
+# 	sgdisk -a1 -n$PARTBIOS:24k:+1000k -t$PARTBIOS:EF02 $DISK
+# 	sgdisk -n$PARTEFI:1M:+512M        -t$PARTEFI:EF00  $DISK
+# 	sgdisk -n$PARTBOOT:0:+2G       -t$PARTBOOT:BF01 $DISK
+# 	sgdisk -n$PARTROOT:0:0         -t$PARTROOT:BF00 $DISK	
+# done
+
+# sleep 2
+
+# creating the boot pool
+#PARTITIONS=${BOOTPARTITIONS}
+raid_def ${BOOTPARTITIONS[@]}
+
+zpool create -f \
+      -o ashift=12 \
+      -o cachefile=/etc/zfs/zpool.cache \
+      -o autotrim=$ENABLE_AUTO_TRIM \
+      -o feature@async_destroy=enabled \
+      -o feature@bookmarks=enabled \
+      -o feature@embedded_data=enabled \
+      -o feature@empty_bpobj=enabled \
+      -o feature@enabled_txg=enabled \
+      -o feature@extensible_dataset=enabled \
+      -o feature@filesystem_limits=enabled \
+      -o feature@hole_birth=enabled \
+      -o feature@large_blocks=enabled \
+      -o feature@livelist=enabled \
+      -o feature@lz4_compress=enabled \
+      -o feature@spacemap_histogram=enabled \
+      -o feature@zpool_checkpoint=enabled \
+      -O atime=off -O relatime=on \
+      -O normalization=formD \
+      -O devices=off \
+      -O canmount=off -O mountpoint=/boot -R /target \
+      $BPOOL $RAIDDEF
+# note to above: could also set property altroot instead of -R
+
+if [ $? -ne 0 ]; then
+	echo "Unable to create zpool '$BPOOL'" >&2
+	exit 1
+fi
 
 # Enable extended attributes on this pool
 if [ "$ENABLE_EXTENDED_ATTRIBUTES" == "on" ]; then
-	zfs set xattr=sa $ZPOOL
-	zfs set acltype=posixacl $ZPOOL
+	zfs set xattr=sa $BPOOL
+	zfs set acltype=posixacl $BPOOL
 fi
 
-zfs create $ZPOOL/ROOT
-zfs create -o mountpoint=/ $ZPOOL/ROOT/$SYSTEM_NAME
-zpool set bootfs=$ZPOOL/ROOT/$SYSTEM_NAME $ZPOOL
+raid_def "${ROOTPARTITIONS[@]}"
+# create the root pool
+zpool create \
+    -o ashift=12 \
+    -O acltype=posixacl -O canmount=off -O compression=zstd \
+    -O dnodesize=auto -O normalization=formD -O relatime=on \
+    -O xattr=sa -O mountpoint=/ -R /target \
+    $RPOOL $RAIDDEF
 
-zfs create -o mountpoint=/tmp -o setuid=off -o exec=$ENABLE_EXECUTE_TMP -o devices=off -o com.sun:auto-snapshot=false -o quota=$SIZETMP $ZPOOL/tmp
-chmod 1777 /target/tmp
+# create the datasets
+create_datasets
+create_optional_datasets
+setup_base_system
+zfs_boot_setup
 
-# /var needs to be mounted via fstab, the ZFS mount script runs too late during boot
-zfs create -o mountpoint=legacy $ZPOOL/var
-mkdir -v /target/var
-mount -t zfs $ZPOOL/var /target/var
+install_grub
 
-# /usr needs to be mounted via fstab, the ZFS mount script runs too late during boot
-zfs create -o mountpoint=legacy $ZPOOL/usr
-mkdir -v /target/usr
-mount -t zfs $ZPOOL/usr /target/usr
-
-# /var/tmp needs to be mounted via fstab, the ZFS mount script runs too late during boot
-zfs create -o mountpoint=legacy -o com.sun:auto-snapshot=false -o quota=$SIZEVARTMP $ZPOOL/var/tmp
-mkdir -v -m 1777 /target/var/tmp
-mount -t zfs $ZPOOL/var/tmp /target/var/tmp
-chmod 1777 /target/var/tmp
-
-if [[ $SIZESWAP != "0G" ]]; then
-	zfs create -V "$SIZESWAP" -b "$(getconf PAGESIZE)" -o primarycache=metadata -o com.sun:auto-snapshot=false -o logbias=throughput -o sync=always $ZPOOL/swap
-fi
-
-# sometimes needed to wait for /dev/zvol/$ZPOOL/swap to appear
-sleep 2
-mkswap -f /dev/zvol/$ZPOOL/swap
-
-zpool status
-zfs list
-
-# Create linux system with preinstalled packages
-need_packages=(openssh-server locales linux-headers-amd64 linux-image-amd64 rsync sharutils psmisc htop patch less console-setup keyboard-configuration "${ADDITIONAL_PACKAGES[@]}")
-include=$(join , "${need_packages[@]}")
-
-debootstrap --include="$include" \
- 						--components main,contrib,non-free \
- 						$TARGETDIST /target http://deb.debian.org/debian/
-
-echo "$SYSTEM_NAME" >/target/etc/hostname
-sed -i "1s/^/127.0.1.1\t$SYSTEM_NAME\n/" /target/etc/hosts
-
-# Copy hostid as the target system will otherwise not be able to mount the misleadingly foreign file system
-cp -va /etc/hostid /target/etc/
-
-cat << EOF >/target/etc/fstab
-# /etc/fstab: static file system information.
-#
-# Use 'blkid' to print the universally unique identifier for a
-# device; this may be used with UUID= as a more robust way to name devices
-# that works even if disks are added and removed. See fstab(5).
-#
-# <file system>         <mount point>   <type>  <options>       <dump>  <pass>
-/dev/zvol/$ZPOOL/swap     none            swap    defaults        0       0
-$ZPOOL/usr                /usr            zfs     defaults        0       0
-$ZPOOL/var                /var            zfs     defaults        0       0
-$ZPOOL/var/tmp            /var/tmp        zfs     defaults        0       0
-EOF
-
-mount --rbind /dev /target/dev
-mount --rbind /proc /target/proc
-mount --rbind /sys /target/sys
-ln -s /proc/mounts /target/etc/mtab
-
-sed -i "s/# \($SYSTEM_LANGUAGE\)/\1/g" /target/etc/locale.gen
-echo "LANG=\"$SYSTEM_LANGUAGE\"" > /target/etc/default/locale
-chroot /target /usr/sbin/locale-gen
-
-# Get debian version in chroot environment
-install_packages "$TARGETDIST" true zfs-initramfs zfs-dkms "${ADDITIONAL_BACKPORTS_PACKAGES[@]}"
-
-# Select correct grub for the requested plattform
-if [ "$GRUBTYPE" == "$EFI" ]; then
-	GRUBPKG="grub-efi-amd64"
-else
-	GRUBPKG="grub-pc"
-fi
-
-chroot /target /usr/bin/apt-get install --yes grub2-common $GRUBPKG
-grep -q zfs /target/etc/default/grub || perl -i -pe 's/quiet/boot=zfs quiet/' /target/etc/default/grub 
-chroot /target /usr/sbin/update-grub
-
-if [ "$GRUBTYPE" == "$EFI" ]; then
-	# "This is arguably a mis-design in the UEFI specification - the ESP is a single point of failure on one disk."
-	# https://wiki.debian.org/UEFI#RAID_for_the_EFI_System_Partition
-
-	mkdir -pv /target/boot/efi
-	I=0
-	for EFIPARTITION in "${EFIPARTITIONS[@]}"; do
-		BOOTLOADERID="$SYSTEM_NAME (RAID disk $I)"
-
-		mkdosfs -F 32 -n EFI-$I $EFIPARTITION
-		mount $EFIPARTITION /target/boot/efi
-
-		# Install grub to the EFI directory without setting an EFI entry to the NVRAM
-		# We need to add the EFI entry manually because the --bootloader-id doesn't work when using secure boot
-		# This is because the grubx64.efi has /EFI/debian/grub hardcoreded for secure boot reasons
-		# As a workaround we install grub into /EFI/debian/grub and add the EFI entrys per disk manually
-		# See: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=%23925309
-		chroot /target /usr/sbin/grub-install --target=x86_64-efi --efi-directory=/boot/efi --no-nvram --recheck --no-floppy
-		umount $EFIPARTITION
-
-		# Delete entry from EFI if it already exists
-		while read -r bootnum; do
-			efibootmgr -b $bootnum --delete-bootnum
-		done < <(efibootmgr | grep "$BOOTLOADERID" | sed "s/^Boot\(....\).*$/\1/g")
-
-		# Add EFI entry for this disk
-		efibootmgr -c --label "$BOOTLOADERID" --loader "\EFI\debian\shimx64.efi" --disk "$EFIPARTITION" --part $PARTEFI
-
-		if [ $I -gt 0 ]; then
-			EFIBAKPART="#"
-		fi
-		echo "${EFIBAKPART}PARTUUID=$(blkid -s PARTUUID -o value $EFIPARTITION) /boot/efi vfat defaults 0 1" >> /target/etc/fstab
-		((I++)) || true
-	done
-fi
-
-if [ -d /proc/acpi ]; then
-	chroot /target /usr/bin/apt-get install --yes acpi acpid
-	chroot /target service acpid stop
-fi
-
-ETHDEV=$(ip addr show | awk '/inet.*brd/{print $NF; exit}')
-test -n "$ETHDEV" || ETHDEV=enp0s1
-echo -e "\nauto $ETHDEV\niface $ETHDEV inet dhcp\n" >>/target/etc/network/interfaces
-echo -e "nameserver 8.8.8.8\nnameserver 8.8.4.4" >> /target/etc/resolv.conf
-
-chroot /target /usr/bin/passwd
-chroot /target /usr/sbin/dpkg-reconfigure tzdata
-chroot /target /usr/sbin/dpkg-reconfigure keyboard-configuration
+final_settings
 
 if [ -n "$POST_INSTALL_SCRIPT" ] && [ -f "$POST_INSTALL_SCRIPT" ]; then
-		target_script="post-script.sh"
+    target_script="post-script.sh"
 
-		cp "$POST_INSTALL_SCRIPT" "/target/$target_script"
-		chmod +x "/target/$target_script"
-		chroot /target /$target_script
-		rm "/target/$target_script"
+    cp "$POST_INSTALL_SCRIPT" "/target/$target_script"
+    chmod +x "/target/$target_script"
+    chroot /target /$target_script
+    rm "/target/$target_script"
 fi
 
 sync
