@@ -35,6 +35,10 @@ function install_packages() {
 			echo "deb http://deb.debian.org/debian bullseye main contrib non-free" >"$destination"
 			backports_version="bullseye"
 			;;
+		12*|bookworm*)
+			echo "deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware" >"$destination"
+			backports_version="bookworm"
+			;;
 		11*|sid*)
 			echo "deb http://deb.debian.org/debian sid main contrib non-free" >"$destination"
 			backports_version="sid"

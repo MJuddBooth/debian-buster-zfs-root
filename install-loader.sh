@@ -56,10 +56,12 @@ if [ "$(id -u )" != "0" ]; then
 fi
 
 function get_disk_selection() {
+    unset SELECT
+    unset EFIPARTITIONS
     declare -A BYID
     while read -r IDLINK; do
 	BYID["$(basename "$(readlink "$IDLINK")")"]="$IDLINK"
-    done < <(find /dev/disk/by-id/ -type l)
+    done < <(find /dev/disk/by-id/ -name "ata*" -type l)
 
     for DISK in $(lsblk -I8,254,259 -dn -o name); do
         dsize=$(lsblk -dn -o size /dev/$DISK|tr -d " ")
@@ -69,7 +71,8 @@ function get_disk_selection() {
 	    SELECT+=("$DISK" "${BYID[$DISK]} ($dsize)" off)
 	fi
     done
-    
+
+    # echo "SELECT=${SELECT[@]}"    
     TMPFILE=$(mktemp)
     whiptail --backtitle "$0" --title "Drive selection" --separate-output \
 	     --checklist "\nPlease select ZFS RAID drives\n" 20 74 8 "${SELECT[@]}" 2>"$TMPFILE"
@@ -98,7 +101,8 @@ function install_grub() {
     if [[ -z $EFIPARTIONS ]]; then
 	get_disk_selection
     fi
-    
+
+    # echo "EFI partitions=${EFIPARTITONS[@]}"
     local TMPFILE=$(mktemp)
     GRUBTYPE=$BIOS
     if [ -d /sys/firmware/efi ]; then
@@ -139,6 +143,7 @@ function install_grub() {
 	    BOOTLOADERID="$SYSTEM_NAME (RAID disk $I)"
 
 	    mkdosfs -F 32 -n EFI-$I $EFIPARTITION
+	    echo mount $EFIPARTITION /target/boot/efi	    
 	    mount $EFIPARTITION /target/boot/efi
 
 	    # Install grub to the EFI directory without setting an EFI entry to the NVRAM
@@ -146,16 +151,18 @@ function install_grub() {
 	    # This is because the grubx64.efi has /EFI/debian/grub hardcoreded for secure boot reasons
 	    # As a workaround we install grub into /EFI/debian/grub and add the EFI entrys per disk manually
 	    # See: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=%23925309
-	    chroot /target /usr/sbin/grub-install --target=x86_64-efi --efi-directory=/boot/efi --no-nvram --recheck --no-floppy
+	    #	    chroot /target /usr/sbin/grub-install --target=x86_64-efi --efi-directory=/boot/efi --no-nvram --recheck --no-floppy
+	    chroot /target /usr/sbin/grub-install --target=x86_64-efi --efi-directory=/boot/efi --bootloader-id="$BOOTLOADERID" --recheck --no-floppy "${DISABLE_SECURE_BOOT}" "${EFIPARTITION}"	    
 	    umount $EFIPARTITION
 
+	    # this should not be needed
 	    # Delete entry from EFI if it already exists
-	    while read -r bootnum; do
-		efibootmgr -b $bootnum --delete-bootnum
-	    done < <(efibootmgr | grep "$BOOTLOADERID" | sed "s/^Boot\(....\).*$/\1/g")
+#	    while read -r bootnum; do
+#		efibootmgr -b $bootnum --delete-bootnum
+#	    done < <(efibootmgr | grep "$BOOTLOADERID" | sed "s/^Boot\(....\).*$/\1/g")
 
 	    # Add EFI entry for this disk
-	    efibootmgr -c --label "$BOOTLOADERID" --loader "\EFI\debian\shimx64.efi" --disk "$EFIPARTITION" --part $PARTEFI
+#	    efibootmgr -c --label "$BOOTLOADERID" --loader "\EFI\debian\shimx64.efi" --disk "$EFIPARTITION" --part $PARTEFI
 
 	    if [ $I -gt 0 ]; then
 		EFIBAKPART="#"

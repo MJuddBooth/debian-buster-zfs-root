@@ -46,4 +46,4 @@ mount --rbind /sys /target/sys
 ln -sf /proc/mounts /target/etc/mtab
 
 # make the teardown function available
-, ./setup-base-system.sh 
+. ./setup-base-system.sh 

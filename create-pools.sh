@@ -10,6 +10,7 @@ function create_boot_pool() {
 	  -o ashift=12 \
 	  -o cachefile=/etc/zfs/zpool.cache \
 	  -o autotrim=$ENABLE_AUTO_TRIM \
+	  -o compatibility=grub2 \
 	  -o feature@async_destroy=enabled \
 	  -o feature@bookmarks=enabled \
 	  -o feature@embedded_data=enabled \
@@ -48,13 +49,14 @@ function create_root_pool() {
     
     zpool create \
 	  -o ashift=12 \
+	  -o autotrim=on \
 	  -O acltype=posixacl \
-	  -O canmount=off \
-	  -O compression=zstd \
+	  -O xattr=sa \
 	  -O dnodesize=auto \
+	  -O compression=zstd \
 	  -O normalization=formD \
 	  -O relatime=on \
-	  -O xattr=sa \
+	  -O canmount=off \
 	  -O mountpoint=/ -R /target \
 	  $rpool $raiddef
 }

@@ -48,8 +48,11 @@ fi
 
 . ./constants.sh
 . ./helper-functions.sh
-. ./create_datasets.sh
+. ./create-pools.sh
+. ./create-datasets.sh
 . ./setup-base-system.sh
+. ./partition-disks.sh
+. ./install-loader.sh
 
 # Name of boot and main ZFS pools
 BPOOL="${BPOOL:-bpool}"
@@ -130,7 +133,7 @@ fi
 declare -A BYID
 while read -r IDLINK; do
 	BYID["$(basename "$(readlink "$IDLINK")")"]="$IDLINK"
-done < <(find /dev/disk/by-id/ -type l)
+done < <(find /dev/disk/by-id/ -name "ata*" -type l)
 
 for DISK in $(lsblk -I8,254,259 -dn -o name); do
         dsize=$(lsblk -dn -o size /dev/$DISK|tr -d " ")
@@ -202,6 +205,9 @@ fi
 
 ### Start the real work
 
+# make sure /target/boot does not exist (say if running again after failure)
+rm -rf /target/boot
+
 # https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=595790
 if [ "$(hostid | cut -b-6)" == "007f01" ]; then
 	dd if=/dev/urandom of=/etc/hostid bs=1 count=4
@@ -232,6 +238,8 @@ fi
 
 test -d /proc/spl/kstat/zfs/$RPOOL && zpool destroy $RPOOL
 
+partition_disks ${DISKS[@]}
+
 # for DISK in "${DISKS[@]}"; do
 # 	echo -e "\nPartitioning disk $DISK"
 
@@ -247,41 +255,13 @@ test -d /proc/spl/kstat/zfs/$RPOOL && zpool destroy $RPOOL
 # 	sgdisk -n$PARTROOT:0:0         -t$PARTROOT:BF00 $DISK	
 # done
 
-# sleep 2
+sleep 3
 
 # creating the boot pool
 #PARTITIONS=${BOOTPARTITIONS}
 raid_def ${BOOTPARTITIONS[@]}
 
-zpool create -f \
-      -o ashift=12 \
-      -o cachefile=/etc/zfs/zpool.cache \
-      -o autotrim=$ENABLE_AUTO_TRIM \
-      -o feature@async_destroy=enabled \
-      -o feature@bookmarks=enabled \
-      -o feature@embedded_data=enabled \
-      -o feature@empty_bpobj=enabled \
-      -o feature@enabled_txg=enabled \
-      -o feature@extensible_dataset=enabled \
-      -o feature@filesystem_limits=enabled \
-      -o feature@hole_birth=enabled \
-      -o feature@large_blocks=enabled \
-      -o feature@livelist=enabled \
-      -o feature@lz4_compress=enabled \
-      -o feature@spacemap_histogram=enabled \
-      -o feature@zpool_checkpoint=enabled \
-      -O atime=off -O relatime=on \
-      -O normalization=formD \
-      -O devices=off \
-      -O canmount=off -O mountpoint=/boot -R /target \
-      $BPOOL $RAIDDEF
-# note to above: could also set property altroot instead of -R
-
-if [ $? -ne 0 ]; then
-	echo "Unable to create zpool '$BPOOL'" >&2
-	exit 1
-fi
-
+create_boot_pool $BPOOL "$RAIDDEF"
 # Enable extended attributes on this pool
 if [ "$ENABLE_EXTENDED_ATTRIBUTES" == "on" ]; then
 	zfs set xattr=sa $BPOOL
@@ -290,17 +270,13 @@ fi
 
 raid_def "${ROOTPARTITIONS[@]}"
 # create the root pool
-zpool create \
-    -o ashift=12 \
-    -O acltype=posixacl -O canmount=off -O compression=zstd \
-    -O dnodesize=auto -O normalization=formD -O relatime=on \
-    -O xattr=sa -O mountpoint=/ -R /target \
-    $RPOOL $RAIDDEF
+create_root_pool $RPOOL "$RAIDDEF"
 
 # create the datasets
 create_datasets
 create_optional_datasets
 setup_base_system
+install_tricky_packages
 zfs_boot_setup
 
 install_grub

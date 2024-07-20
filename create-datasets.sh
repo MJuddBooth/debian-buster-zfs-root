@@ -27,6 +27,10 @@ function create_datasets() {
     mkdir -v /target/var
     mount -t zfs $RPOOL/var /target/var
 
+#    zfs create -o mountpoint=legacy $RPOOL/var/lib
+#    mkdir -v /target/var
+#    mount -t zfs $RPOOL/var/lib /target/var/lib
+
     # /usr needs to be mounted via fstab, the ZFS mount script runs too late during boot
     zfs create -o mountpoint=legacy $RPOOL/usr
     mkdir -v /target/usr
@@ -56,8 +60,8 @@ function create_optional_datasets() {
     zfs create -o com.sun:auto-snapshot=false $RPOOL/var/cache
     zfs create                                 $RPOOL/usr/local
     zfs create                                 $RPOOL/var/mail
-    zfs create                                 $RPOOL/var/lib/AccountsService
-    zfs create -o com.sun:auto-snapshot=false  $RPOOL/var/lib/docker
+#    zfs create                                 $RPOOL/var/lib/AccountsService
+#    zfs create -o com.sun:auto-snapshot=false  $RPOOL/var/lib/docker
     
     zfs list
     
