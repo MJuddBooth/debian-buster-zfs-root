@@ -14,8 +14,8 @@ function setup_chroot() {
 
 function teardown_chroot() {
     umount /target/dev
-    umount /target/proc
-    umount /target/sys
+    umount -R /target/proc
+    umount -R /target/sys
     rm -f /target/etc/mtab
 }
 
